@@ -447,6 +447,35 @@ func createMessage(session *discordgo.Session, message *discordgo.MessageCreate)
 			}
 			session.ChannelMessageSendEmbed(message.ChannelID, embed)
 
+		// mary trivia -> starts a trivia game
+		case command[1] == "trivia":
+			err, res, correctAnswer, difficulty := database.Trivia(session, message)
+			if err != "" {
+				session.ChannelMessageSend(message.ChannelID, err)
+			} else {
+				session.ChannelMessageSendEmbed(message.ChannelID, res)
+
+				// Wait for user to respond
+				msg, err := database.WaitForResponse(session, message.ChannelID, message.Author.ID)
+				if err != nil {
+					fmt.Printf("Error waiting for user response! %s\n", err)
+				}
+				if msg == "You ran out of time!" {
+					session.ChannelMessageSend(message.ChannelID, msg)
+					return
+				}
+
+				// Check if user's response is correct
+				if strings.ToLower(msg) == strings.ToLower(correctAnswer) {
+					session.ChannelMessageSend(message.ChannelID, "Correct!")
+					// Give user coins based on difficulty
+					res := database.PayForCorrectAnswer(session, message, difficulty, MONGO_URI, guildID, guildName, userID, userName)
+					session.ChannelMessageSend(message.ChannelID, res)
+				} else {
+					session.ChannelMessageSend(message.ChannelID, "Incorrect! The correct answer is " + correctAnswer + ".")
+				}
+			}
+
 		// mary gamble amount -> gamble amount of coins
 		case command[1] == "gamble":
 			if len(command) == 2 {
