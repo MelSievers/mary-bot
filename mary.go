@@ -475,7 +475,7 @@ func createMessage(session *discordgo.Session, message *discordgo.MessageCreate)
 					return
 				}
 			}
-			err, res, correctAnswer, difficulty := database.Trivia(session, message)
+			err, res, correctAnswer, difficulty := database.Trivia(session, message, MONGO_URI, guildID, guildName, userID, userName)
 			if err != "" {
 				session.ChannelMessageSend(message.ChannelID, err)
 			} else {
