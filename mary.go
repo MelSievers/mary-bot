@@ -358,6 +358,28 @@ func createMessage(session *discordgo.Session, message *discordgo.MessageCreate)
 				session.ChannelMessageSend(message.ChannelID, "Error retrieving balance!")
 			}
 
+		// mary shop -> shows shop
+		case command[1] == "shop":
+			pageSize := 3
+
+			// If the user does not declare a page number, default to page 1 (0)
+			if len(command) == 2 {
+				database.Shop(session, message, pageSize, 0)
+			} else if len(command) == 3 {
+				// Check if third argument is an integer
+				_, err := strconv.Atoi(command[2])
+				if err != nil {
+					session.ChannelMessageSend(message.ChannelID, "Please enter a valid number!")
+				} else {
+					// Get page number
+					page, err := strconv.Atoi(command[2])
+					if err != nil {
+						session.ChannelMessageSend(message.ChannelID, "Error occurred while converting page number!" + strings.Title(err.Error()))
+					}
+					database.Shop(session, message, pageSize, page-1)
+				}
+			}
+
 		// mary daily -> gives user 100 coins
 		case command[1] == "daily":
 			res := database.Economy(MONGO_URI, guildID, guildName, userID, userName, "daily", 100)
