@@ -33,6 +33,7 @@ func Trivia(session *discordgo.Session, message *discordgo.MessageCreate, mongoU
 	// Connect to MongoDB
 	client, err := mongo.NewClient(options.Client().ApplyURI(mongoURI))
 	if err != nil {
+		fmt.Printf("Error occurred creating MongoDB client! %s\n", err)
 		return "Error occurred creating MongoDB client! " + strings.Title(err.Error()), nil, "", ""
 	}
 
@@ -40,17 +41,16 @@ func Trivia(session *discordgo.Session, message *discordgo.MessageCreate, mongoU
 	defer cancel() // Fix for memory leak
 	err = client.Connect(ctx)
 	if err != nil {
+		fmt.Printf("Error occurred connecting to database! %s\n", err)
 		return "Error occurred while connecting to database! " + strings.Title(err.Error()), nil, "", ""
 	}
 
 	// Disconnect from database
 	defer client.Disconnect(ctx) // Occurs as last line of main() function
 
-	// If database for server doesn't exist, create it
+	// Get user from database
 	serverDatabase := client.Database(strconv.Itoa(guildID))
 	userCollection := serverDatabase.Collection("Users")
-
-	// Check if user exists in database
 	collectionResult, err := userCollection.FindOne(
 		ctx,
 		bson.D{
@@ -84,6 +84,7 @@ func Trivia(session *discordgo.Session, message *discordgo.MessageCreate, mongoU
 	// Make a request to the trivia API
 	resp, err := http.Get("https://opentdb.com/api.php?amount=1&type=multiple")
 	if err != nil {
+		fmt.Printf("Failed to get trivia question! %s\n", err)
 		return "Failed to get trivia question!" + strings.Title(err.Error()), nil, "", ""
 	}
 	defer resp.Body.Close()
@@ -95,10 +96,12 @@ func Trivia(session *discordgo.Session, message *discordgo.MessageCreate, mongoU
 	}
 	err = json.NewDecoder(resp.Body).Decode(&triviaResponse)
 	if err != nil {
+		fmt.Printf("Failed to parse trivia question! %s\n", err)
 		return "Failed to parse trivia question!" + strings.Title(err.Error()), nil, "", ""
 	}
 
 	if triviaResponse.ResponseCode != 0 || len(triviaResponse.Results) == 0 {
+		fmt.Printf("Failed to get trivia question! Response code: %d\n", triviaResponse.ResponseCode)
 		return "Failed to get trivia question!" + strings.Title(err.Error()), nil, "", ""
 	}
 
@@ -201,6 +204,7 @@ func PayForCorrectAnswer(session *discordgo.Session, message *discordgo.MessageC
 	// Connect to MongoDB
 	client, err := mongo.NewClient(options.Client().ApplyURI(mongoURI))
 	if err != nil {
+		fmt.Printf("Error occurred creating MongoDB client! " + strings.Title(err.Error()))
 		return "Error occurred creating MongoDB client! " + strings.Title(err.Error())
 	}
 
@@ -208,6 +212,7 @@ func PayForCorrectAnswer(session *discordgo.Session, message *discordgo.MessageC
 	defer cancel() // Fix for memory leak
 	err = client.Connect(ctx)
 	if err != nil {
+		fmt.Printf("Error occurred while connecting to database! %s\n", err)
 		return "Error occurred while connecting to database! " + strings.Title(err.Error())
 	}
 
@@ -245,6 +250,7 @@ func CheckBalance(session *discordgo.Session, message *discordgo.MessageCreate, 
 	// Connect to MongoDB
 	client, err := mongo.NewClient(options.Client().ApplyURI(mongoURI))
 	if err != nil {
+		fmt.Printf("Error occurred creating MongoDB client! " + strings.Title(err.Error()))
 		return "Error occurred creating MongoDB client! " + strings.Title(err.Error())
 	}
 
@@ -252,17 +258,22 @@ func CheckBalance(session *discordgo.Session, message *discordgo.MessageCreate, 
 	defer cancel() // Fix for memory leak
 	err = client.Connect(ctx)
 	if err != nil {
+		fmt.Printf("Error occurred while connecting to database! %s\n", err)
 		return "Error occurred while connecting to database! " + strings.Title(err.Error())
 	}
 
 	// Disconnect from database
 	defer client.Disconnect(ctx) // Occurs as last line of main() function
 
-	// If database for server doesn't exist, create it
+	// Check if user exists in database
+	res := IsPlaying(ctx, client, guildID, guildName, userID, userName)
+	if res != "" {
+		return res
+	}
+
+	// Get user from database
 	serverDatabase := client.Database(strconv.Itoa(guildID))
 	userCollection := serverDatabase.Collection("Users")
-
-	// Check if user exists in database
 	collectionResult, err := userCollection.FindOne(
 		ctx,
 		bson.D{
@@ -270,42 +281,14 @@ func CheckBalance(session *discordgo.Session, message *discordgo.MessageCreate, 
 			{Key: "guild_id", Value: guildID},
 		},
 	).DecodeBytes()
-	_ = collectionResult // Unused variable
-	if err != nil {
-		// If user doesn't exist, create them
-		if err == mongo.ErrNoDocuments {
-			// Insert user into database
-			result, err := userCollection.InsertOne(
-				ctx,
-				bson.D{
-					{Key: "user_id", Value: userID},
-					{Key: "user_name", Value: userName},
-					{Key: "guild_id", Value: guildID},
-					{Key: "guild_name", Value: guildName},
-					{Key: "balance", Value: int64(0)}, // Enter balance as int64 value
-					{Key: "last_daily", Value: time.Now().AddDate(0, 0, -1)},
-					{Key: "last_beg", Value: time.Now().AddDate(0, 0, -1)},
-					{Key: "last_rob", Value: time.Now().AddDate(0, 0, -1)},
-					{Key: "last_gamble", Value: time.Now().AddDate(0, 0, -1)},
-					{Key: "last_trivia", Value: time.Now().AddDate(0, 0, -1)},
-				},
-			)
-			if err != nil {
-				fmt.Printf("Error occurred while inserting to database! %s\n", err)
-				return "Error occurred while inserting to database! " + strings.Title(err.Error())
-			}
-			fmt.Printf("Inserted user %s into database with ID %s\n", userName, result.InsertedID)
-		} else {
-			fmt.Printf("Error occurred while selecting from database! %s\n", err)
-			return "Error occurred while selecting from database! " + strings.Title(err.Error())
-		}
-	}
+	
 	// Find user
 	collectionResult, err2 := userCollection.FindOne(context.Background(), bson.D{
 		{Key: "user_id", Value: userID},
 		{Key: "guild_id", Value: guildID},
 	}).DecodeBytes() 
 	if err2 != nil {
+		fmt.Printf("Error occurred while finding user! %s\n", err2)
 		return "Error occurred while finding user! " + strings.Title(err2.Error())
 	}
 
