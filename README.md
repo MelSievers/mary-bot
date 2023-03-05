@@ -89,6 +89,9 @@ The <a href="https://github.com/mongodb/mongo-go-driver">MongoDB Go Driver</a> a
 ## Update March 4, 2023
 My GCP trial ran out, so I've switched to using <a href="https://railway.app/">Railway</a>. I've also been working for the past two weeks on more economy functions. This includes trivia, inventory, shop, give (an item, not coins), buy, sell, and five different use commands. The help, trivia, inventory, shop, and profile commands are all sent as rich embeds now, too! Feel free to try them out.
 
+## Demo
+<img src="https://github.com/Chubbyman2/mary-bot/blob/main/docs/demo-2.PNG">
+
 ## Future Plans
 ### StockInfo
 Basically, I want to add a basic stock trading feature to Mary. No stops or limits, just buy and sell using the Yahoo Finance API. The implementation will be similar to what I did with trivia (API call) and inventory (portfolio of stocks). StockInfo will retrieve the current value of the stock along with other relevant information. 
